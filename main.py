@@ -25,17 +25,17 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-SYSTEM_PROMPT = "Sen ZukkAI ismli o'zbek repetitorisan. Matematika, fizika, kimyo va biologiyadan masalalarni bosqichma-bosqich yechib berasan."
+# Tizim ko'rsatmasi
+SYSTEM_PROMPT = "Sen ZukkAI ismli o'zbek repetitorisan. Matematika, fizika va boshqa fanlardan masalalarni o'zbek tilida bosqichma-bosqich yechib berasan."
 
-# 2. RASMNI ENKODLASH
 def encode_image(image_content):
     return base64.b64encode(image_content).decode('utf-8')
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.reply_to(message, "Assalomu alaykum! Men tayyorman. 📸 Rasm yuboring yoki savol yozing.")
+    bot.reply_to(message, "Assalomu alaykum! Men tayyorman. ✨\n\nMisolni rasmga olib yuboring yoki matn ko'rinishida yozing!")
 
-# 3. RASMLI XABARLAR
+# 2. RASMLI XABARLAR UCHUN
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
     status_msg = bot.reply_to(message, "Rasmni tahlil qilyapman... 🔍")
@@ -45,12 +45,13 @@ def handle_photo(message):
         response = requests.get(image_url)
         base64_image = encode_image(response.content)
 
+        # Vision modeldan foydalanamiz
         chat_completion = client.chat.completions.create(
             messages=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": SYSTEM_PROMPT + " Rasmdagi masalani yechib ber."},
+                        {"type": "text", "text": f"{SYSTEM_PROMPT} Mana bu rasmdagi masalani yechib ber."},
                         {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ],
                 }
@@ -59,9 +60,9 @@ def handle_photo(message):
         )
         bot.edit_message_text(chat_completion.choices[0].message.content, message.chat.id, status_msg.message_id)
     except Exception as e:
-        bot.edit_message_text(f"Xatolik: AI javob bera olmadi. Qaytadan urinib ko'ring.", message.chat.id, status_msg.message_id)
+        bot.edit_message_text(f"Xatolik: Rasmni tahlil qila olmadim. Qayta urinib ko'ring.", message.chat.id, status_msg.message_id)
 
-# 4. MATNLI XABARLAR
+# 3. MATNLI XABARLAR UCHUN
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     status_msg = bot.reply_to(message, "O'ylayapman... 🤔")
@@ -71,14 +72,14 @@ def handle_text(message):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": message.text}
             ],
-            model="llama3-8b-8192",
+            model="llama-3.1-8b-instant",
         )
         bot.edit_message_text(chat_completion.choices[0].message.content, message.chat.id, status_msg.message_id)
     except Exception as e:
-        bot.edit_message_text("Kechirasiz, matnni tahlil qilishda xato bo'ldi.", message.chat.id, status_msg.message_id)
+        bot.edit_message_text("Kechirasiz, javob berishda xatolik yuz berdi.", message.chat.id, status_msg.message_id)
 
 if __name__ == "__main__":
     bot.remove_webhook()
     keep_alive()
     bot.infinity_polling()
-                              
+    
