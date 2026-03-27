@@ -78,7 +78,7 @@ def handle_learning(message):
                              message.chat.id, processing_msg.message_id)
 
 # 3. ISHGA TUSHIRISH
-if __name__ == "__main__":
+if __name__ == "__main__":bot.remove_webhook()
     keep_alive()
     print("ZukkAI repetitori ishga tushdi...")
     bot.infinity_polling()
