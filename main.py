@@ -2,6 +2,7 @@ import telebot
 from groq import Groq
 import os
 import base64
+import requests
 from flask import Flask
 from threading import Thread
 
@@ -24,81 +25,60 @@ def keep_alive():
     t = Thread(target=run)
     t.start()
 
-SYSTEM_INSTRUCTION = """
-Sen ZukkAI ismli o'zbek repetitorisan. 
-Sizga rasm yoki matn ko'rinishida topshiriq yuboriladi.
-Vazifang: Masalani tahlil qilish va uni BOSQICHMA-BOSQICH o'zbek tilida tushuntirib yechish.
-Matematika, Fizika, Kimyo va Biologiya qonuniyatlariga tayanib javob ber.
-"""
+SYSTEM_PROMPT = "Sen ZukkAI ismli o'zbek repetitorisan. Matematika, fizika, kimyo va biologiyadan masalalarni bosqichma-bosqich yechib berasan."
 
-# 2. RASMNI ENKODLASH FUNKSIYASI
-def encode_image(image_path):
-    with open(image_path, "rb") as image_file:
-        return base64.b64encode(image_file.read()).decode('utf-8')
+# 2. RASMNI ENKODLASH
+def encode_image(image_content):
+    return base64.b64encode(image_content).decode('utf-8')
 
 @bot.message_handler(commands=['start'])
 def welcome(message):
-    bot.reply_to(message, "Assalomu alaykum! Men endi rasmdagi misollarni ham yechaman. 📸\n\nMisolni rasmga olib yuboring yoki matn ko'rinishida yozing!")
+    bot.reply_to(message, "Assalomu alaykum! Men tayyorman. 📸 Rasm yuboring yoki savol yozing.")
 
-# 3. RASMLI XABARLARNI QABUL QILISH
+# 3. RASMLI XABARLAR
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    processing_msg = bot.reply_to(message, "Rasmni ko'ryapman, tahlil qilishga biroz vaqt bering... 🔍")
-    
+    status_msg = bot.reply_to(message, "Rasmni tahlil qilyapman... 🔍")
     try:
-        # Rasmni yuklab olish
         file_info = bot.get_file(message.photo[-1].file_id)
-        downloaded_file = bot.download_file(file_info.file_path)
-        
-        with open("image.jpg", 'wb') as new_file:
-            new_file.write(downloaded_file)
-        
-        base64_image = encode_image("image.jpg")
+        image_url = f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_info.file_path}"
+        response = requests.get(image_url)
+        base64_image = encode_image(response.content)
 
-        # Vision AI ga yuborish
         chat_completion = client.chat.completions.create(
             messages=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "text", "text": SYSTEM_INSTRUCTION},
-                        {
-                            "type": "image_url",
-                            "image_url": {
-                                "url": f"data:image/jpeg;base64,{base64_image}",
-                            },
-                        },
+                        {"type": "text", "text": SYSTEM_PROMPT + " Rasmdagi masalani yechib ber."},
+                        {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}}
                     ],
                 }
             ],
             model="llama-3.2-11b-vision-preview",
         )
-
-        ai_reply = chat_completion.choices[0].message.content
-        bot.edit_message_text(ai_reply, message.chat.id, processing_msg.message_id)
-
+        bot.edit_message_text(chat_completion.choices[0].message.content, message.chat.id, status_msg.message_id)
     except Exception as e:
-        bot.edit_message_text("Rasmni tahlil qilishda xatolik bo'ldi. Iltimos, rasm aniq ekanligini tekshiring.", message.chat.id, processing_msg.message_id)
+        bot.edit_message_text(f"Xatolik: AI javob bera olmadi. Qaytadan urinib ko'ring.", message.chat.id, status_msg.message_id)
 
-# 4. MATNLI XABARLARNI QABUL QILISH
+# 4. MATNLI XABARLAR
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
-    processing_msg = bot.reply_to(message, "O'ylayapman... 🤔")
+    status_msg = bot.reply_to(message, "O'ylayapman... 🤔")
     try:
         chat_completion = client.chat.completions.create(
             messages=[
-                {"role": "system", "content": SYSTEM_INSTRUCTION},
+                {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": message.text}
             ],
             model="llama3-8b-8192",
         )
-        ai_reply = chat_completion.choices[0].message.content
-        bot.edit_message_text(ai_reply, message.chat.id, processing_msg.message_id)
+        bot.edit_message_text(chat_completion.choices[0].message.content, message.chat.id, status_msg.message_id)
     except Exception as e:
-        bot.edit_message_text("Xatolik yuz berdi.", message.chat.id, processing_msg.message_id)
+        bot.edit_message_text("Kechirasiz, matnni tahlil qilishda xato bo'ldi.", message.chat.id, status_msg.message_id)
 
 if __name__ == "__main__":
     bot.remove_webhook()
     keep_alive()
     bot.infinity_polling()
-                
+                              
